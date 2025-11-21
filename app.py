@@ -97,6 +97,53 @@ def greedy_decode(model, src_sp, tgt_sp, sentence, max_len=50):
     return tgt_sp.decode(preds)
 
 
+# # ---------- Streamlit UI ----------
+# st.set_page_config(page_title="Urdu → Roman Urdu Translator", layout="centered")
+
+# st.title("🇵🇰 Urdu → Roman Urdu Translator (Seq2Seq + Attention)")
+
+# st.markdown("""
+# This app translates **Urdu text to Roman Urdu** using a custom **Seq2Seq + Attention** model.
+
+# Model + Tokenizers are hosted on **Hugging Face**, and code runs on Streamlit Cloud.
+# """)
+
+# input_text = st.text_area(
+#     "Enter Urdu text:",
+#     value="مجھے اردو بہت پسند ہے",
+#     height=120
+# )
+
+# col1, col2 = st.columns([1, 1])
+
+# with col1:
+#     if st.button("Load Model"):
+#         try:
+#             model, ur_sp, ro_sp = load_model()
+#             st.session_state["model_loaded"] = True
+#             st.success("✅ Model loaded successfully!")
+#         except Exception as e:
+#             st.error(f"Error loading model: {e}")
+
+# with col2:
+#     if st.button("Translate"):
+#         try:
+#             if "model_loaded" not in st.session_state:
+#                 model, ur_sp, ro_sp = load_model()
+#                 st.session_state["model_loaded"] = True
+
+#             with st.spinner("Translating..."):
+#                 output = greedy_decode(model, ur_sp, ro_sp, input_text, MAX_LEN)
+
+#             st.subheader("Roman Urdu Output")
+#             st.write(output)
+
+#         except Exception as e:
+#             st.error(f"Translation failed: {e}")
+
+# st.markdown("---")
+# st.write("💡 Powered by PyTorch + SentencePiece + Streamlit")
+
 # ---------- Streamlit UI ----------
 st.set_page_config(page_title="Urdu → Roman Urdu Translator", layout="centered")
 
@@ -116,30 +163,45 @@ input_text = st.text_area(
 
 col1, col2 = st.columns([1, 1])
 
+# ---------- FIXED LOAD BUTTON ----------
 with col1:
     if st.button("Load Model"):
         try:
             model, ur_sp, ro_sp = load_model()
-            st.session_state["model_loaded"] = True
+            st.session_state["model"] = model
+            st.session_state["ur_sp"] = ur_sp
+            st.session_state["ro_sp"] = ro_sp
+
             st.success("✅ Model loaded successfully!")
         except Exception as e:
             st.error(f"Error loading model: {e}")
 
+# ---------- FIXED TRANSLATE BUTTON ----------
 with col2:
     if st.button("Translate"):
         try:
-            if "model_loaded" not in st.session_state:
+            # If model is NOT loaded → load it automatically
+            if "model" not in st.session_state:
                 model, ur_sp, ro_sp = load_model()
-                st.session_state["model_loaded"] = True
+                st.session_state["model"] = model
+                st.session_state["ur_sp"] = ur_sp
+                st.session_state["ro_sp"] = ro_sp
+
+            model = st.session_state["model"]
+            ur_sp = st.session_state["ur_sp"]
+            ro_sp = st.session_state["ro_sp"]
 
             with st.spinner("Translating..."):
-                output = greedy_decode(model, ur_sp, ro_sp, input_text, MAX_LEN)
+                output = greedy_decode(
+                    model,
+                    ur_sp,
+                    ro_sp,
+                    input_text,
+                    MAX_LEN
+                )
 
             st.subheader("Roman Urdu Output")
             st.write(output)
 
         except Exception as e:
             st.error(f"Translation failed: {e}")
-
-st.markdown("---")
-st.write("💡 Powered by PyTorch + SentencePiece + Streamlit")

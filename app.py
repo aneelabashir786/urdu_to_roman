@@ -5,16 +5,18 @@ import sentencepiece as spm
 import requests
 import os
 from model import Encoder, AttnDecoder, Seq2Seq
-
+from pathlib import Path
 
 # ---------- Hugging Face Model Repo ----------
-HF_REPO = "https://huggingface.co/aneelaBashir22f3414/urdu_to_roman/tree/main"
+BASE_HF_URL = "https://huggingface.co/aneelaBashir22f3414/urdu_to_roman/resolve/main/"
 
-MODEL_FILE = "best_attn_seq2seq.pt"
-URDU_SP = "urdu_spm.model"
-ROMAN_SP = "roman_spm.model"
-URDU_VOCAB = "urdu.vocab"
-ROMAN_VOCAB = "roman.vocab"
+FILES = {
+    "MODEL_FILE": "best_attn_seq2seq.pt",
+    "URDU_SP": "urdu_spm.model",
+    "ROMAN_SP": "roman_spm.model",
+    "URDU_VOCAB": "urdu.vocab",
+    "ROMAN_VOCAB": "roman.vocab"
+}
 
 MAX_LEN = 50
 PAD_IDX = 0
@@ -25,30 +27,29 @@ DEVICE = torch.device("cpu")
 
 # ---------- Download Helper ----------
 def download_if_missing(filename):
-    """Download a file from HuggingFace if it's not in the local folder."""
-    if os.path.exists(filename):
+    """Download a file from Hugging Face if it's not in the local folder."""
+    path = Path(filename)
+    if path.exists():
         return
-
-    url = HF_REPO + filename
-    st.write(f"Downloading **{filename}** ...")
-
-    r = requests.get(url)
+    url = BASE_HF_URL + filename
+    st.write(f"Downloading **{filename}** from Hugging Face ...")
+    r = requests.get(url, stream=True)
     if r.status_code != 200:
-        raise FileNotFoundError(f"Could not download {filename} from HuggingFace")
-
+        raise FileNotFoundError(f"Could not download {filename} from Hugging Face")
     with open(filename, "wb") as f:
-        f.write(r.content)
+        for chunk in r.iter_content(chunk_size=8192):
+            f.write(chunk)
 
 
-# ---------- Ensure all required files exist ----------
 def ensure_files():
-    for file in [MODEL_FILE, URDU_SP, ROMAN_SP, URDU_VOCAB, ROMAN_VOCAB]:
+    """Ensure all required files exist locally."""
+    for file in FILES.values():
         download_if_missing(file)
 
 
 # ---------- Cache Tokenizers ----------
 @st.cache_resource
-def load_tokenizers(urdu_path=URDU_SP, roman_path=ROMAN_SP):
+def load_tokenizers(urdu_path=FILES["URDU_SP"], roman_path=FILES["ROMAN_SP"]):
     ur = spm.SentencePieceProcessor(model_file=urdu_path)
     ro = spm.SentencePieceProcessor(model_file=roman_path)
     return ur, ro
@@ -56,9 +57,8 @@ def load_tokenizers(urdu_path=URDU_SP, roman_path=ROMAN_SP):
 
 # ---------- Cache Model ----------
 @st.cache_resource
-def load_model(checkpoint_path=MODEL_FILE):
+def load_model(checkpoint_path=FILES["MODEL_FILE"]):
     ensure_files()
-
     ur_sp, ro_sp = load_tokenizers()
     URV, ROV = ur_sp.get_piece_size(), ro_sp.get_piece_size()
 
@@ -74,7 +74,6 @@ def load_model(checkpoint_path=MODEL_FILE):
     st.write("Loading model weights...")
     state = torch.load(checkpoint_path, map_location=DEVICE)
     model.load_state_dict(state)
-
     model.to(DEVICE)
     model.eval()
 
@@ -92,7 +91,6 @@ def greedy_decode(model, src_sp, tgt_sp, sentence, max_len=50):
 
     preds = outputs.argmax(2).squeeze(0).tolist()
 
-    # stop at eos
     if tgt_sp.eos_id() in preds:
         preds = preds[:preds.index(tgt_sp.eos_id())]
 
@@ -121,7 +119,6 @@ col1, col2 = st.columns([1, 1])
 with col1:
     if st.button("Load Model"):
         try:
-            ensure_files()
             model, ur_sp, ro_sp = load_model()
             st.session_state["model_loaded"] = True
             st.success("✅ Model loaded successfully!")
@@ -132,7 +129,6 @@ with col2:
     if st.button("Translate"):
         try:
             if "model_loaded" not in st.session_state:
-                ensure_files()
                 model, ur_sp, ro_sp = load_model()
                 st.session_state["model_loaded"] = True
 
@@ -147,5 +143,3 @@ with col2:
 
 st.markdown("---")
 st.write("💡 Powered by PyTorch + SentencePiece + Streamlit")
-
-
